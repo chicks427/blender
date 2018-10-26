@@ -174,6 +174,43 @@ def get_mesh_data(object):
 
     return mesh_data_dictionary
 
+def get_weights(ob, group_name):
+    group_index = ob.vertex_groups[group_name].index
+    for i, v in enumerate(ob.data.vertices):
+        for g in v.groups:
+            if g.group == group_index:
+                yield (i, g.weight)
+                break
+
+def get_weights_for_vxs_in_group(obj, group_name):
+    bmesh, tree = get_bmesh_and_tree(obj)
+    vx = get_verts_in_group(obj, group_name)
+    bvx = get_bmesh_verts(bmesh, vx)
+
+    all_weights = get_weights(obj, group_name)
+    included_idx = []
+    for v in bvx:
+        included_idx.append(v.index)
+
+    group_weights =[]
+
+    for i, w in enumerate(all_weights):
+        if w[0] in included_idx:
+            group_weights.append(w)
+
+    return group_weights
+
+def matrix_world(armature_ob, bone_name):
+    local = armature_ob.data.bones[bone_name].matrix_local
+    basis = armature_ob.pose.bones[bone_name].matrix_basis
+
+    parent = armature_ob.pose.bones[bone_name].parent
+    if parent == None:
+        return  local * basis
+    else:
+        parent_local = armature_ob.data.bones[parent.name].matrix_local
+        return matrix_world(armature_ob, parent.name) * (parent_local.inverted() * local) * basis
+
 datapoints = 10
 armature = bpy.data.objects["Armature.001"]
 
@@ -207,11 +244,54 @@ mesh_objects = [body, thighhighs, shoes, suit, tie, collar, face,
 lips, teeth, hair_front, hair_back, hair_back2, hair_back3, hair_base,
 eyeballs, iris]
 
-#mesh_data = get_mesh_data(lips)
-mesh_data = {}
+vertex_coordinates = []
+bone_coordinates = []
 
-for i in range(len(mesh_objects)):
-    mesh_data[i] =get_mesh_data(mesh_objects[i])
+test_bone = armature.pose.bones["head lip upper middle"]
 
-with open("mesh_data.json", "w") as w:
-    json.dump(mesh_data, w)
+test_bone.location = mathutils.Vector((0,0,0))
+
+bpy.context.scene.update()
+
+bm, tree = get_bmesh_and_tree(lips)
+
+vx = get_verts_in_group(lips, "head lip upper middle")
+
+bvx = get_bmesh_verts(bm, vx)
+
+bone_coordinates.append(tuple(test_bone.location))
+vertex_coordinates.append(tuple(bvx[0].co))
+
+for i in range(10000):
+    print(i)
+
+    test_bone.location.x = (np.random.uniform() - 0.5) * 0.1
+    test_bone.location.y = (np.random.uniform() - 0.5) * 0.1
+    test_bone.location.z = (np.random.uniform() - 0.5) * 0.1
+
+    bpy.context.scene.update()
+    bm, tree = get_bmesh_and_tree(lips)
+
+    vx = get_verts_in_group(lips, "head lip upper middle")
+
+    bvx = get_bmesh_verts(bm, vx)
+
+    bone_coordinates.append(tuple(test_bone.location))
+    vertex_coordinates.append(tuple(bvx[0].co))
+
+bone_test_data = {'v': vertex_coordinates, 'b': bone_coordinates}
+
+with open("bone_test_data.json", "w") as w:
+    json.dump(bone_test_data, w)
+
+"""x,y,z = get_bone_locs(armature, "head lip upper middle")
+
+bone_loc = (x,y,z)
+
+print("Bone Location: " + str(bone_loc))
+
+
+
+for w in get_weights_for_vxs_in_group(lips, "head lip upper middle"):
+    if w[0] == bvx[0].index:
+        print(w)"""
